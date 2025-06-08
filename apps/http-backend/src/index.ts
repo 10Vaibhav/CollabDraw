@@ -2,34 +2,49 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "@repo/backend-common/config";
 import { middleware } from "./middleware";
-import {CreateRoomSchema, CreateUserSchema, SigninSchema } from "@repo/common/types";
+import { CreateRoomSchema, CreateUserSchema, SigninSchema } from "@repo/common/types";
+import { prismaClient } from "@repo/db/client";
 
 const app = express();
+app.use(express.json());
 
-app.post("/signup", (req, res)=> {
-    // db call
+app.post("/signup", async (req, res) => {
 
-    const data = CreateUserSchema.safeParse(req.body);
+    const parseData = CreateUserSchema.safeParse(req.body);
 
-    if(!data.success){
+    if (!parseData.success) {
         res.status(403).json({
             message: "invalid inputs"
         });
-        return ;
+        return;
     }
 
-    res.json({
-        userId: "123"
-    })
+    try {
+        await prismaClient.user.create({
+            data: {
+                email: parseData.data.username,
+                password: parseData.data.password,
+                name: parseData.data.name
+            }
+        });
+
+        res.json({
+            userId: "123"
+        });
+    } catch (error) {
+        res.status(411).json({
+            message: "User already exists with the username"
+        });
+    }
 });
 
-app.post("/signin", (req, res)=> {
+app.post("/signin", (req, res) => {
 
     const userId = 1;
 
     const data = SigninSchema.safeParse(req.body);
 
-    if(!data.success){
+    if (!data.success) {
         res.status(403).json({
             message: "invalid inputs"
         });
@@ -38,23 +53,23 @@ app.post("/signin", (req, res)=> {
 
     const token = jwt.sign({
         userId
-    },JWT_SECRET);
+    }, JWT_SECRET);
 
     res.json({
         token
     });
 });
 
-app.post("/room",middleware ,(req,res)=> {
+app.post("/room", middleware, (req, res) => {
     // db call
 
     const data = CreateRoomSchema.safeParse(req.body);
 
-    if(!data.success){
+    if (!data.success) {
         res.status(403).json({
             message: "invalid inputs"
         });
-        return ;
+        return;
     }
 
     res.json({
