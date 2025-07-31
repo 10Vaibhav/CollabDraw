@@ -21,11 +21,12 @@ export function Canvas({
   const router = useRouter(); // Initialize game instance when canvas mounts
 
   useLayoutEffect(() => {
+    if (gameRef.current) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const game = new Game(canvas, roomId, socket); // game.setTool(selectedTool);
-    // ⛔️ REMOVE THE PROBLEMATIC LINE BELOW
+    const game = new Game(canvas, roomId, socket);
     gameRef.current = game;
 
     return () => {

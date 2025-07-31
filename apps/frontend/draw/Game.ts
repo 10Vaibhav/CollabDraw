@@ -25,6 +25,7 @@ export class Game {
   private isDrawing = false;
   private startX = 0;
   private startY = 0;
+  private isInitialized = false;
 
   constructor(canvas: HTMLCanvasElement, roomId: string, socket: WebSocket) {
     this.canvas = canvas;
@@ -37,14 +38,17 @@ export class Game {
     this.offscreen.height = canvas.height;
     this.offscreenCtx = this.offscreen.getContext("2d", { alpha: false })!;
 
-    this.initialize();
+    // Initialize asynchronously
+    this.initialize().catch(error => {
+      console.error("Failed to initialize Game:", error);
+    });
   }
 
   public destroy() {
     this.canvas.removeEventListener("mousedown", this.mouseDownHandler);
     this.canvas.removeEventListener("mouseup", this.mouseUpHandler);
     this.canvas.removeEventListener("mousemove", this.mouseMoveHandler);
-    this.canvas.removeEventListener("mouseleave", this.mouseUpHandler); // Ensure cleanup
+    this.canvas.removeEventListener("mouseleave", this.mouseUpHandler);
 
     if (this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(
@@ -54,20 +58,71 @@ export class Game {
   }
 
   private async initialize() {
-    await this.loadExistingShapes();
-    this.redrawStaticShapes(); // Draw all existing shapes to offscreen canvas
-    this.redrawMainCanvas(); // Draw offscreen content to main canvas
-    this.setupSocketHandlers();
-    this.addCanvasEventListeners();
+    console.log("Initializing Game with roomId:", this.roomId);
+    
+    try {
+      // Set up basic canvas functionality first
+      this.setupSocketHandlers();
+      this.addCanvasEventListeners();
+      this.redrawStaticShapes();
+      this.redrawMainCanvas();
+      
+      // Mark as initialized so user can start drawing immediately
+      this.isInitialized = true;
+      
+      // Try to load existing shapes in the background
+      await this.loadExistingShapes();
+      
+    } catch (error) {
+      console.error("Error during initialization:", error);
+      // Even if loading shapes fails, ensure the app is still usable
+      this.isInitialized = true;
+      this.redrawStaticShapes();
+      this.redrawMainCanvas();
+    }
   }
 
   private async loadExistingShapes() {
     try {
-      this.existingShapes = await getExistingShapes(Number(this.roomId));
-      console.log("Existing shapes loaded:", this.existingShapes);
+      console.log("Loading existing shapes for room:", this.roomId);
+      
+      // Validate and convert roomId
+      const documentId = Number(this.roomId);
+      if (isNaN(documentId) || documentId <= 0) {
+        console.warn("Invalid room ID for loading shapes:", this.roomId);
+        return;
+      }
+
+      const shapes = await getExistingShapes(documentId);
+      
+      if (Array.isArray(shapes)) {
+        this.existingShapes = shapes;
+        console.log("Successfully loaded", shapes.length, "existing shapes");
+        
+        // Redraw canvas with loaded shapes
+        this.redrawStaticShapes();
+        this.redrawMainCanvas();
+      } else {
+        console.warn("Invalid shapes data received:", shapes);
+      }
+      
     } catch (error) {
       console.error("Failed to load existing shapes:", error);
+      
+      // Show user-friendly message but don't break the app
+      if (error instanceof Error) {
+        console.warn(`Canvas started without existing shapes: ${error.message}`);
+      }
+      
+      // Ensure we have an empty array
+      this.existingShapes = [];
     }
+  }
+
+  // Public method to retry loading shapes if needed
+  public async retryLoadShapes() {
+    console.log("Retrying to load shapes...");
+    await this.loadExistingShapes();
   }
 
   private redrawStaticShapes() {
@@ -165,13 +220,21 @@ export class Game {
     if (idsToAttemptDeletion.length > 0) {
       try {
         await deleteShapesByIds(idsToAttemptDeletion);
-        console.log("Successfully deleted shapes with IDs:",` ${idsToAttemptDeletion}`);
+        console.log("Successfully deleted shapes with IDs:", idsToAttemptDeletion);
       } catch (error) {
         console.error("Failed to delete shapes on server:", error);
-        alert("Failed to save erasure changes. Re-syncing with server.");
-        await this.loadExistingShapes();
-        this.redrawStaticShapes();
-        this.redrawMainCanvas();
+        
+        // Show user-friendly error message
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        console.warn(`Deletion failed: ${errorMessage}. Re-syncing with server...`);
+        
+        // Re-sync with server
+        try {
+          await this.loadExistingShapes();
+        } catch (syncError) {
+          console.error("Failed to re-sync with server:", syncError);
+          // Continue with local state - at least the app keeps working
+        }
       }
     }
   }
@@ -236,33 +299,63 @@ export class Game {
     this.redrawMainCanvas();
   }
 
+  public getIsInitialized(): boolean {
+    return this.isInitialized;
+  }
+
   private setupSocketHandlers() {
     this.socket.onmessage = ({ data }) => {
-      const msg = JSON.parse(data);
-      const shapeData = typeof msg.shape === "string" ? JSON.parse(msg.shape).shape : msg.shape;
+      try {
+        const message = JSON.parse(data);
 
-      if (!shapeData || typeof shapeData.type !== "string") {
-        console.warn("Received malformed shape data:", shapeData);
-        return;
-      }
+        // The actual shape data might be nested if it's coming from the backend
+        const shapeDataString = message.shape ?? message;
 
-      if (shapeData.type === "eraser") {
-        this.eraseShapes(shapeData.cordinates);
-      } else {
-        this.existingShapes.push(shapeData);
-        this.redrawStaticShapes();
-        this.redrawMainCanvas();
-      }
+        let shape;
+        if (typeof shapeDataString === 'string') {
+          shape = JSON.parse(shapeDataString);
+        } else {
+          shape = shapeDataString;
+        }
+
+        // Final validation
+        if (!shape || typeof shape.type !== 'string') {
+          console.warn("Received malformed shape data:", shape);
+          return;
+        }
+
+        if (shape.type === "eraser") {
+          this.eraseShapes(shape.cordinates);
+        } else {
+          this.existingShapes.push(shape);
+          this.redrawStaticShapes();
+          this.redrawMainCanvas();
+        }
+      } catch (error) {
+        console.error("Error processing WebSocket message:", data, error);
+      }  
+    };
+
+    this.socket.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+
+    this.socket.onclose = (event) => {
+      console.log("WebSocket closed:", event.code, event.reason);
     };
   }
 
   private sendShapeToServer(shape: Shape) {
     if (this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(
-        JSON.stringify({ type: "chat", shape, roomId: this.roomId })
-      );
+      try {
+        this.socket.send(
+          JSON.stringify({ type: "chat", shape, roomId: this.roomId })
+        );
+      } catch (error) {
+        console.error("Error sending shape to server:", error);
+      }
     } else {
-      console.warn("WebSocket not open. Cannot send shape to server.");
+      console.warn("WebSocket not open. Cannot send shape to server. ReadyState:", this.socket.readyState);
     }
   }
 
@@ -274,19 +367,24 @@ export class Game {
   }
 
   private mouseDownHandler = (e: MouseEvent) => {
+    // Don't allow drawing until initialized
+    if (!this.isInitialized) {
+      console.log("Game not yet initialized, please wait...");
+      return;
+    }
+
     this.isDrawing = true;
     this.startX = e.offsetX;
     this.startY = e.offsetY;
+    
     if (this.selectedTool === "eraser") {
       this.eraserPath = [{ x: e.offsetX, y: e.offsetY }];
       this.eraseShapes(this.eraserPath);
     }
   };
 
-  // ❗❗ KEY FIX AREA ❗❗
-  // This handler now completely separates the eraser logic from shape-drawing logic.
   private mouseUpHandler = (e: MouseEvent) => {
-    if (!this.isDrawing) {
+    if (!this.isDrawing || !this.isInitialized) {
       return;
     }
     this.isDrawing = false;
@@ -356,7 +454,8 @@ export class Game {
   };
 
   private mouseMoveHandler = (e: MouseEvent) => {
-    if (!this.isDrawing) return;
+    if (!this.isDrawing || !this.isInitialized) return;
+    
     const currX = e.offsetX;
     const currY = e.offsetY;
 

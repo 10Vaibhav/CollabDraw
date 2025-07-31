@@ -19,6 +19,10 @@ export function RoomCanvas({ roomId, token }: { roomId: string; token: string })
       console.error("WebSocket error:", err)
     }
 
+    ws.onclose = () => {
+      setSocket(null)
+    }
+
     return () => {
       ws.close()
     }
