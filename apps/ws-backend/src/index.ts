@@ -1,150 +1,180 @@
-import { WebSocketServer, WebSocket } from "ws";
-import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "@repo/backend-common/config";
-import {prismaClient} from "@repo/db/client";
+import { WebSocket, WebSocketServer } from "ws";
+import jwt from "jsonwebtoken";
+import { prismaClient } from "@repo/db/client";
 
-const wss = new WebSocketServer({ port: 8081 });
-
+// --- Types ---
 interface User {
-    ws: WebSocket,
-    rooms: string[],
-    userId: string
+    ws: WebSocket;
+    rooms: Set<string>;
+    userId: string;
 }
 
+type Shape =
+    | { type: "rect"; x: number; y: number; width: number; height: number }
+    | { type: "circle"; centerX: number; centerY: number; radius: number }
+    | { type: "line"; startX: number; startY: number; endX: number; endY: number }
+    | { type: "eraser"; cordinates: { x: number; y: number }[] };
+
+interface IncomingMessage {
+    type: string;
+    roomId?: string;
+    shape?: Shape;
+}
+
+const wss = new WebSocketServer({ port: 3002 });
 const users: User[] = [];
 
+// --- Auth ---
 function checkUser(token: string): string | null {
-
     try {
-        const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-
-        if (!decoded || !decoded.userId) {
-            return null;
-        }
-
-        return decoded.userId;
-    } catch (error) {
+        const decoded = jwt.verify(token, JWT_SECRET) as any;
+        return decoded?.userId || null;
+    } catch {
         return null;
     }
 }
 
-wss.on('connection', function connection(ws, request) {
-    try {
-        const url = request.url;
+// --- Broadcast Helper ---
+function broadcastToRoom(roomId: string, data: any, exceptWs?: WebSocket) {
+    users.forEach((user) => {
+        if (
+            user.rooms.has(roomId) &&
+            user.ws.readyState === WebSocket.OPEN &&
+            user.ws !== exceptWs
+        ) {
+            user.ws.send(JSON.stringify(data));
+        }
+    });
+}
 
-        if (!url) {
-            ws.close(1008, 'URL is required');
+// --- Main Connection Handler ---
+wss.on("connection", (ws, request) => {
+    const url = request.url;
+    if (!url) return ws.close();
+
+    const queryParams = new URLSearchParams(url.split("?")[1]);
+    const token = queryParams.get("token") || "";
+    const userId = checkUser(token);
+    if (!userId) return ws.close();
+
+    // Register user
+    const user: User = { ws, rooms: new Set(), userId };
+    users.push(user);
+
+    // --- Error handler for this socket ---
+    ws.on("error", (err) => {
+        console.error("WebSocket error:", err);
+    });
+
+    ws.on("message", async (raw) => {
+        let msg: IncomingMessage;
+        try {
+            msg = typeof raw === "string" ? JSON.parse(raw) : JSON.parse(raw.toString());
+        } catch {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "error", message: "Invalid JSON" }));
+            }
             return;
         }
 
-        const queryParams = new URLSearchParams(url.split('?')[1]);
-        const token = queryParams.get('token') || "";
-        const userId = checkUser(token);
-
-        if (!userId) {
-            ws.close(1008, 'Invalid authentication');
+        // --- Room Join/Leave Logic ---
+        if (msg.type === "join_room" && msg.roomId) {
+            user.rooms.add(msg.roomId);
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "joined_room", roomId: msg.roomId }));
+            }
+            return;
+        }
+        if (msg.type === "leave_room" && msg.roomId) {
+            user.rooms.delete(msg.roomId);
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "left_room", roomId: msg.roomId }));
+            }
             return;
         }
 
-        users.push({
-            ws,
-            userId,
-            rooms: []
-        });
-
-        ws.on('message', async function message(data) {
+        // --- Shape/Canvas Logic ---
+        if (msg.type === "chat" && msg.roomId && msg.shape) {
             try {
+                const shape = msg.shape;
 
-                let parsedData;
-                if(typeof data !== "string"){
-                    parsedData = JSON.parse(data.toString());
-                }else{
-                    parsedData = JSON.parse(data);
-                }
-
-                if (parsedData.type === "join_room") {
-                    const user = users.find(x => x.ws === ws);
-                    if (user && parsedData.roomId) {
-                        user.rooms.push(parsedData.roomId);
+                // Save to DB if not eraser
+                if (shape.type !== "eraser") {
+                    // Map shape to DB fields for each type
+                    let dbData: any = {
+                        documentId: Number(msg.roomId),
+                        type: shape.type,
+                        strokeColor: "#ffffff",
+                    };
+                    if (shape.type === "rect") {
+                        dbData = {
+                            ...dbData,
+                            x: shape.x,
+                            y: shape.y,
+                            width: shape.width,
+                            height: shape.height,
+                        };
+                    } else if (shape.type === "circle") {
+                        dbData = {
+                            ...dbData,
+                            centerX: shape.centerX,
+                            centerY: shape.centerY,
+                            radius: shape.radius
+                        };
+                    } else if (shape.type === "line") {
+                        dbData = {
+                            ...dbData,
+                            startX: shape.startX,
+                            startY: shape.startY,
+                            endX: shape.endX,
+                            endY: shape.endY
+                        };
                     }
-                }
-
-                if (parsedData.type === "leave_room") {
-                    const user = users.find(x => x.ws === ws);
-                    if (!user) return;
-                    user.rooms = user.rooms.filter(x => x !== parsedData.roomId);
-                }
-
-                if (parsedData.type === "chat") {
-                    const roomId = parsedData.roomId;
-                    const message = parsedData.message;
-
-                    if (!roomId || !message) {
-                        ws.send(JSON.stringify({ error: 'Missing roomId or message' }));
-                        return;
-                    }
-
-                    // Find the current user
-                    const currentUser = users.find(x => x.ws === ws);
-                    if (!currentUser) {
-                        ws.send(JSON.stringify({ error: 'User not found' }));
-                        return;
-                    }
-
-                    // Check if user has joined the room
-                    if (!currentUser.rooms.includes(roomId)) {
-                        ws.send(JSON.stringify({ error: 'You must join the room before sending messages' }));
-                        return;
-                    }
-
-                    try {
-                        await prismaClient.chat.create({
-                            data: {
-                                roomId: Number(roomId),
-                                message,
-                                userId
-                            }
+                    await prismaClient.element.create({ data: dbData });
+                } else {
+                    // Eraser logic: delete shapes in DB that intersect with eraser points
+                    for (const point of shape.cordinates) {
+                        await prismaClient.element.deleteMany({
+                            where: {
+                                documentId: Number(msg.roomId),
+                                x: { gte: point.x - 20, lte: point.x + 20 },
+                                y: { gte: point.y - 20, lte: point.y + 20 },
+                            },
                         });
-
-                        // Broadcast to room members
-                        users.forEach(user => {
-                            if (user.rooms.includes(roomId)) {
-                                try {
-                                    user.ws.send(JSON.stringify({
-                                        type: "chat",
-                                        message: message,
-                                        roomId
-                                    }));
-                                } catch (error) {
-                                    console.error('Failed to send message to user:', error);
-                                }
-                            }
-                        });
-                    } catch (error) {
-                        console.error('Database error:', error);
-                        ws.send(JSON.stringify({ error: 'Failed to save message' }));
                     }
                 }
-            } catch (error) {
-                console.error('Message processing error:', error);
-                ws.send(JSON.stringify({ error: 'Invalid message format' }));
+
+                // Broadcast to all users in the room (except sender)
+                broadcastToRoom(
+                    msg.roomId,
+                    {
+                        type: "chat",
+                        shape: msg.shape,
+                        roomId: msg.roomId,
+                    },
+                    ws
+                );
+            } catch (e) {
+                console.error("Shape error or DB error:", e);
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(
+                        JSON.stringify({ type: "error", message: "Shape error or DB error" })
+                    );
+                }
             }
-        });
+            return;
+        }
 
-        ws.on('error', (error) => {
-            console.error('WebSocket error:', error);
-        });
+        // --- Unknown Message Type ---
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "error", message: "Unknown message type" }));
+        }
+    });
 
-        ws.on('close', () => {
-            const index = users.findIndex(x => x.ws === ws);
-            if (index !== -1) {
-                users.splice(index, 1);
-            }
-        });
-
-    } catch (error) {
-        console.error('Connection error:', error);
-        ws.close(1011, 'Internal server error');
-    }
+    ws.on("close", () => {
+        // Remove user on disconnect
+        const idx = users.findIndex((u) => u.ws === ws);
+        if (idx !== -1) users.splice(idx, 1);
+    });
 });
-

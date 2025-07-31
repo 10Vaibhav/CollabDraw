@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-import { IconButton } from "./IconButton";
-import { Circle, Pencil, RectangleHorizontalIcon } from "lucide-react";
-import { Game } from "@/draw/Game";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { LucideLogOut } from "lucide-react";
 
-export type Tool = "circle" | "rect" | "pencil";
+import { TopBar } from "./TopBar";
+import { Game } from "@/draw/Game";
+import { IconButton } from "./IconButton";
+
+export type Tool = "circle" | "rect" | "line" | "eraser";
 
 export function Canvas({
   roomId,
@@ -13,79 +16,58 @@ export function Canvas({
   socket: WebSocket;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [game, setGame] = useState<Game>();
+  const gameRef = useRef<Game | null>(null);
   const [selectedTool, setSelectedTool] = useState<Tool>("circle");
+  const router = useRouter(); // Initialize game instance when canvas mounts
+
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const game = new Game(canvas, roomId, socket); // game.setTool(selectedTool);
+    // ⛔️ REMOVE THE PROBLEMATIC LINE BELOW
+    gameRef.current = game;
+
+    return () => {
+      gameRef.current?.destroy();
+      gameRef.current = null;
+    };
+  }, [roomId, socket]); // This dependency array is correct for this purpose.
+  // Update tool in active game
 
   useEffect(() => {
-    game?.setTool(selectedTool);
-  }, [selectedTool, game]);
+    // ✅ This hook now correctly handles the initial tool set AND all subsequent updates.
+    gameRef.current?.setTool(selectedTool);
+  }, [selectedTool]); // Handle logout + room cleanup
 
-  useEffect(() => {
-    if (canvasRef.current) {
-      const g = new Game(canvasRef.current, roomId, socket);
-      setGame(g);
-
-      return () => {
-        g.destroy()
-      };
-    }
-  }, [canvasRef]);
+  const handleLogout = () => {
+    gameRef.current?.destroy();
+    gameRef.current = null;
+    router.replace("/dashboard");
+  };
 
   return (
-    <div
-      style={{
-        height: "100vh",
-        overflow: "hidden",
-      }}
-    >
+    <div className="overflow-hidden flex justify-center">
+      {/* ... rest of your component is fine ... */}
+      {" "}
       <canvas
         ref={canvasRef}
-        width={window.innerWidth}
-        height={window.innerHeight}
-      ></canvas>
-      <TopBar selectedTool={selectedTool} setSelectedTool={setSelectedTool} />
-    </div>
-  );
-}
-
-function TopBar({
-  selectedTool,
-  setSelectedTool,
-}: {
-  selectedTool: Tool;
-  setSelectedTool: (s: Tool) => void;
-}) {
-  return (
-    <div
-      style={{
-        position: "fixed",
-        top: 10,
-        left: 10,
-      }}
-    >
-      <div className="flex gap-t">
-        <IconButton
-          onClick={() => {
-            setSelectedTool("pencil");
-          }}
-          activated={selectedTool === "pencil"}
-          icon={<Pencil />}
-        ></IconButton>
-        <IconButton
-          onClick={() => {
-            setSelectedTool("rect");
-          }}
-          activated={selectedTool === "rect"}
-          icon={<RectangleHorizontalIcon />}
-        ></IconButton>
-        <IconButton
-          onClick={() => {
-            setSelectedTool("circle");
-          }}
-          activated={selectedTool === "circle"}
-          icon={<Circle />}
-        ></IconButton>
+        width={typeof window !== "undefined" ? window.innerWidth : 800}
+        height={typeof window !== "undefined" ? window.innerHeight : 600}
+        className="bg-black"
+      />
+      {" "}
+      <div className="fixed top-0 mt-5">
+        {" "}
+        <TopBar selectedTool={selectedTool} setSelectedTool={setSelectedTool} />
+        {" "}
       </div>
+      {" "}
+      <div className="bg-white w-10 rounded-lg absolute bottom-1 right-1 mb-10 mr-10">
+        <IconButton icon={<LucideLogOut />} onClick={handleLogout} />   
+        {" "}
+      </div>
+      {" "}
     </div>
   );
 }

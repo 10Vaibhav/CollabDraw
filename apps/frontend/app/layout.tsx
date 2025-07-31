@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "CollabDraw",
-  description: "Created by Lord",
+  description: "Created with inspiration from a lord",
 };
 
 export default function RootLayout({
