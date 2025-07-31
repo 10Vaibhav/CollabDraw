@@ -21,7 +21,8 @@ export function Canvas({
   const router = useRouter(); // Initialize game instance when canvas mounts
 
   useLayoutEffect(() => {
-    if (gameRef.current) return;
+    // Ensure we don't initialize the game without a valid room ID.
+    if (gameRef.current || !roomId) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;

@@ -8,9 +8,10 @@ import { useRouter } from "next/navigation";
 type Props = {
   isOpen: boolean;
   onClose: () => void;
+  onRoomCreated: () => void; // Add the new prop
 };
 
-export default function CreateRoomModal({ isOpen, onClose }: Props) {
+export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Props) {
   const [roomName, setRoomName] = useState("");
   const [error, setError] = useState("");
   const router = useRouter();
@@ -27,13 +28,13 @@ export default function CreateRoomModal({ isOpen, onClose }: Props) {
     }
 
     try {
-      const res = await axios.post(
+      await axios.post(
         `${HTTP_BACKEND}/document`,
         { roomName },
         { withCredentials: true }
       );
-      const roomId = res.data.documentId;
-      router.push(`/dashboard/${roomId}`);
+      onClose(); // First, close the modal
+      onRoomCreated(); // Then, trigger the refresh
     } catch (err) {
       console.error("Create room error:", err);
       if (isAxiosError(err) && err.response?.status === 409) {

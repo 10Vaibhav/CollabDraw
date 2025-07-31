@@ -23,22 +23,22 @@ export default function Dashboard() {
   const [error, setError] = useState('');
   const router = useRouter();
 
-  useEffect(() => {
-    const fetchRooms = async () => {
-      try {
-        setLoading(true);
-        const res = await axios.get(`${HTTP_BACKEND}/documents`, { withCredentials: true });
-        setRooms(res.data.documents);
-      } catch (err) {
-        console.error('Error fetching rooms:', err);
-        setError('Failed to load rooms. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchRooms();
+  const fetchRooms = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${HTTP_BACKEND}/documents`, { withCredentials: true });
+      setRooms(res.data.documents);
+    } catch (err) {
+      console.error('Error fetching rooms:', err);
+      setError('Failed to load rooms. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchRooms();
+  }, [fetchRooms]);
 
   const handleLogout = async () => {
     try {
@@ -147,6 +147,7 @@ export default function Dashboard() {
           <CreateRoomModal
             isOpen={isCreateModalOpen}
             onClose={() => setIsCreateModalOpen(false)}
+            onRoomCreated={fetchRooms}
           />
         )}
 

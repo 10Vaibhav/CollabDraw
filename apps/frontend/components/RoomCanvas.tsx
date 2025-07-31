@@ -7,6 +7,10 @@ import { Canvas } from "./Canvas"
 export function RoomCanvas({ roomId, token }: { roomId: string; token: string }) {
   const [socket, setSocket] = useState<WebSocket | null>(null)
 
+  if (!roomId) {
+    return <div>Loading room...</div>;
+  }
+
   useEffect(() => {
     const ws = new WebSocket(`${WS_URL}?token=${token}`)
 
