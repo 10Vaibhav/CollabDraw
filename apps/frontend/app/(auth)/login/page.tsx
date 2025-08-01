@@ -33,10 +33,10 @@ async function loginUser(){
 
     router.push("/dashboard");
   } catch (error) {
-    console.error("Login failed:", error as any);
-    if (error.response?.status === 403 || error.response?.status === 401) {
+    if (axios.isAxiosError(error) && (error.response?.status === 403 || error.response?.status === 401)) {
       setError("Invalid credentials. Please check your email and password.");
     } else {
+      console.error("Login failed:", error);
       setError("An unexpected error occurred. Please try again later.");
     }
   }

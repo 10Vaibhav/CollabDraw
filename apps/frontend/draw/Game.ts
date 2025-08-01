@@ -308,32 +308,28 @@ export class Game {
       try {
         const message = JSON.parse(data);
 
-        // The actual shape data might be nested if it's coming from the backend
-        const shapeDataString = message.shape ?? message;
+        if (message.type === "draw" && message.shape) {
+          const shape = message.shape;
 
-        let shape;
-        if (typeof shapeDataString === 'string') {
-          shape = JSON.parse(shapeDataString);
+          // Final validation
+          if (typeof shape.type !== 'string') {
+            console.warn("Received malformed shape data:", shape);
+            return;
+          }
+
+          if (shape.type === "eraser") {
+            this.eraseShapes(shape.cordinates);
+          } else {
+            this.existingShapes.push(shape);
+            this.redrawStaticShapes();
+            this.redrawMainCanvas();
+          }
         } else {
-          shape = shapeDataString;
-        }
-
-        // Final validation
-        if (!shape || typeof shape.type !== 'string') {
-          console.warn("Received malformed shape data:", shape);
-          return;
-        }
-
-        if (shape.type === "eraser") {
-          this.eraseShapes(shape.cordinates);
-        } else {
-          this.existingShapes.push(shape);
-          this.redrawStaticShapes();
-          this.redrawMainCanvas();
+          // console.log("Received non-draw message or message without shape:", message);
         }
       } catch (error) {
         console.error("Error processing WebSocket message:", data, error);
-      }  
+      }
     };
 
     this.socket.onerror = (error) => {
@@ -349,7 +345,7 @@ export class Game {
     if (this.socket.readyState === WebSocket.OPEN) {
       try {
         this.socket.send(
-          JSON.stringify({ type: "chat", shape, roomId: this.roomId })
+          JSON.stringify({ type: "draw", shape, roomId: this.roomId })
         );
       } catch (error) {
         console.error("Error sending shape to server:", error);

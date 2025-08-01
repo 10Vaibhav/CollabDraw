@@ -6,7 +6,6 @@ import { prismaClient } from "@repo/db/client";
 // --- Types ---
 interface User {
     ws: WebSocket;
-    rooms: Set<string>;
     userId: string;
 }
 
@@ -24,6 +23,7 @@ interface IncomingMessage {
 
 const wss = new WebSocketServer({ port: 3002 });
 const users: User[] = [];
+const rooms = new Map<string, Set<WebSocket>>();
 
 // --- Auth ---
 function checkUser(token: string): string | null {
@@ -36,16 +36,18 @@ function checkUser(token: string): string | null {
 }
 
 // --- Broadcast Helper ---
-function broadcastToRoom(roomId: string, data: any, exceptWs?: WebSocket) {
-    users.forEach((user) => {
-        if (
-            user.rooms.has(roomId) &&
-            user.ws.readyState === WebSocket.OPEN &&
-            user.ws !== exceptWs
-        ) {
-            user.ws.send(JSON.stringify(data));
+function broadcastToRoom(roomId: string, message: any, sender: WebSocket) {
+    const room = rooms.get(roomId);
+    if (!room) {
+        return;
+    }
+
+    const messageString = JSON.stringify(message);
+    for (const client of room) {
+        if (client !== sender && client.readyState === WebSocket.OPEN) {
+            client.send(messageString);
         }
-    });
+    }
 }
 
 // --- Main Connection Handler ---
@@ -59,7 +61,7 @@ wss.on("connection", (ws, request) => {
     if (!userId) return ws.close();
 
     // Register user
-    const user: User = { ws, rooms: new Set(), userId };
+    const user: User = { ws, userId };
     users.push(user);
 
     // --- Error handler for this socket ---
@@ -80,14 +82,25 @@ wss.on("connection", (ws, request) => {
 
         // --- Room Join/Leave Logic ---
         if (msg.type === "join_room" && msg.roomId) {
-            user.rooms.add(msg.roomId);
+            let room = rooms.get(msg.roomId);
+            if (!room) {
+                room = new Set();
+                rooms.set(msg.roomId, room);
+            }
+            room.add(ws);
             if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: "joined_room", roomId: msg.roomId }));
             }
             return;
         }
         if (msg.type === "leave_room" && msg.roomId) {
-            user.rooms.delete(msg.roomId);
+            const room = rooms.get(msg.roomId);
+            if (room) {
+                room.delete(ws);
+                if (room.size === 0) {
+                    rooms.delete(msg.roomId);
+                }
+            }
             if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: "left_room", roomId: msg.roomId }));
             }
@@ -95,11 +108,22 @@ wss.on("connection", (ws, request) => {
         }
 
         // --- Shape/Canvas Logic ---
-        if (msg.type === "chat" && msg.roomId && msg.shape) {
-            try {
-                const shape = msg.shape;
+        if (msg.type === "draw" && msg.roomId && msg.shape) {
+            const shape = msg.shape;
 
-                // Save to DB if not eraser
+            // Broadcast to all users in the room (except sender) first for responsiveness
+            broadcastToRoom(
+                msg.roomId,
+                {
+                    type: "draw",
+                    shape: msg.shape,
+                    roomId: msg.roomId,
+                },
+                ws
+            );
+
+            // Then, attempt to save to DB
+            try {
                 if (shape.type !== "eraser") {
                     // Map shape to DB fields for each type
                     let dbData: any = {
@@ -107,30 +131,11 @@ wss.on("connection", (ws, request) => {
                         type: shape.type,
                         strokeColor: "#ffffff",
                     };
-                    if (shape.type === "rect") {
-                        dbData = {
-                            ...dbData,
-                            x: shape.x,
-                            y: shape.y,
-                            width: shape.width,
-                            height: shape.height,
-                        };
-                    } else if (shape.type === "circle") {
-                        dbData = {
-                            ...dbData,
-                            centerX: shape.centerX,
-                            centerY: shape.centerY,
-                            radius: shape.radius
-                        };
-                    } else if (shape.type === "line") {
-                        dbData = {
-                            ...dbData,
-                            startX: shape.startX,
-                            startY: shape.startY,
-                            endX: shape.endX,
-                            endY: shape.endY
-                        };
+
+                    if (shape.type === "rect" || shape.type === "circle" || shape.type === "line") {
+                        dbData = { ...dbData, ...shape };
                     }
+
                     await prismaClient.element.create({ data: dbData });
                 } else {
                     // Eraser logic: delete shapes in DB that intersect with eraser points
@@ -144,24 +149,10 @@ wss.on("connection", (ws, request) => {
                         });
                     }
                 }
-
-                // Broadcast to all users in the room (except sender)
-                broadcastToRoom(
-                    msg.roomId,
-                    {
-                        type: "chat",
-                        shape: msg.shape,
-                        roomId: msg.roomId,
-                    },
-                    ws
-                );
             } catch (e) {
-                console.error("Shape error or DB error:", e);
-                if (ws.readyState === WebSocket.OPEN) {
-                    ws.send(
-                        JSON.stringify({ type: "error", message: "Shape error or DB error" })
-                    );
-                }
+                console.error("Database operation failed:", e);
+                // We don't send a message back to the user because the drawing was already broadcast.
+                // The frontend will be out of sync with the DB, but that's a problem for another time.
             }
             return;
         }
@@ -174,6 +165,17 @@ wss.on("connection", (ws, request) => {
 
     ws.on("close", () => {
         // Remove user on disconnect
+        // On close, remove user from all rooms
+        rooms.forEach((room, roomId) => {
+            if (room.has(ws)) {
+                room.delete(ws);
+                if (room.size === 0) {
+                    rooms.delete(roomId);
+                }
+            }
+        });
+
+        // Remove user from users array
         const idx = users.findIndex((u) => u.ws === ws);
         if (idx !== -1) users.splice(idx, 1);
     });
