@@ -13,6 +13,10 @@ type Shape =
     | { type: "rect"; x: number; y: number; width: number; height: number }
     | { type: "circle"; centerX: number; centerY: number; radius: number }
     | { type: "line"; startX: number; startY: number; endX: number; endY: number }
+    | { type: "arrow"; startX: number; startY: number; endX: number; endY: number }
+    | { type: "diamond"; centerX: number; centerY: number; width: number; height: number }
+    | { type: "ellipse"; centerX: number; centerY: number; radiusX: number; radiusY: number }
+    | { type: "parallelogram"; x: number; y: number; width: number; height: number; skew: number }
     | { type: "eraser"; cordinates: { x: number; y: number }[] };
 
 interface IncomingMessage {
@@ -132,19 +136,111 @@ wss.on("connection", (ws, request) => {
                         strokeColor: "#ffffff",
                     };
 
-                    if (shape.type === "rect" || shape.type === "circle" || shape.type === "line") {
-                        dbData = { ...dbData, ...shape };
+                    // Handle all shape types with proper field mapping
+                    switch (shape.type) {
+                        case "rect":
+                            dbData = { 
+                                ...dbData, 
+                                x: shape.x, 
+                                y: shape.y, 
+                                width: shape.width, 
+                                height: shape.height 
+                            };
+                            break;
+                        case "circle":
+                            dbData = { 
+                                ...dbData, 
+                                centerX: shape.centerX, 
+                                centerY: shape.centerY, 
+                                radius: shape.radius 
+                            };
+                            break;
+                        case "line":
+                        case "arrow":
+                            dbData = { 
+                                ...dbData, 
+                                startX: shape.startX, 
+                                startY: shape.startY, 
+                                endX: shape.endX, 
+                                endY: shape.endY 
+                            };
+                            break;
+                        case "diamond":
+                            dbData = { 
+                                ...dbData, 
+                                centerX: shape.centerX, 
+                                centerY: shape.centerY, 
+                                width: shape.width, 
+                                height: shape.height 
+                            };
+                            break;
+                        case "ellipse":
+                            // Store ellipse with proper radiusX and radiusY fields
+                            dbData = { 
+                                ...dbData, 
+                                centerX: shape.centerX, 
+                                centerY: shape.centerY, 
+                                radiusX: shape.radiusX,
+                                radiusY: shape.radiusY
+                            };
+                            break;
+                        case "parallelogram":
+                            // Store parallelogram with proper skew field
+                            dbData = { 
+                                ...dbData, 
+                                x: shape.x, 
+                                y: shape.y, 
+                                width: shape.width, 
+                                height: shape.height,
+                                skew: shape.skew
+                            };
+                            break;
                     }
 
                     await prismaClient.element.create({ data: dbData });
+                    console.log("Successfully saved shape to database:", shape.type, dbData);
                 } else {
                     // Eraser logic: delete shapes in DB that intersect with eraser points
                     for (const point of shape.cordinates) {
+                        // Delete elements that are close to the eraser point
                         await prismaClient.element.deleteMany({
                             where: {
                                 documentId: Number(msg.roomId),
-                                x: { gte: point.x - 20, lte: point.x + 20 },
-                                y: { gte: point.y - 20, lte: point.y + 20 },
+                                OR: [
+                                    // For rect and parallelogram
+                                    {
+                                        AND: [
+                                            { x: { not: null } },
+                                            { y: { not: null } },
+                                            { x: { lte: point.x + 20 } },
+                                            { y: { lte: point.y + 20 } },
+                                            { x: { gte: point.x - 20 } },
+                                            { y: { gte: point.y - 20 } }
+                                        ]
+                                    },
+                                    // For circle, diamond, ellipse
+                                    {
+                                        AND: [
+                                            { centerX: { not: null } },
+                                            { centerY: { not: null } },
+                                            { centerX: { lte: point.x + 20 } },
+                                            { centerY: { lte: point.y + 20 } },
+                                            { centerX: { gte: point.x - 20 } },
+                                            { centerY: { gte: point.y - 20 } }
+                                        ]
+                                    },
+                                    // For line and arrow
+                                    {
+                                        AND: [
+                                            { startX: { not: null } },
+                                            { startY: { not: null } },
+                                            { startX: { lte: point.x + 20 } },
+                                            { startY: { lte: point.y + 20 } },
+                                            { startX: { gte: point.x - 20 } },
+                                            { startY: { gte: point.y - 20 } }
+                                        ]
+                                    }
+                                ]
                             },
                         });
                     }

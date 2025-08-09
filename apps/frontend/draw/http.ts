@@ -51,15 +51,136 @@ export async function getExistingShapes(documentId: number): Promise<(Shape & { 
 
       console.log("Shapes fetched successfully:", response.data);
       
-      // Ensure we return an array even if the response structure is unexpected
+      // Process the response data and convert DB format to frontend format
+      let elements: any[] = [];
       if (response.data && Array.isArray(response.data.elements)) {
-        return response.data.elements as (Shape & { id: number })[];
+        elements = response.data.elements;
       } else if (Array.isArray(response.data)) {
-        return response.data as (Shape & { id: number })[];
+        elements = response.data;
       } else {
         console.warn("Unexpected response structure:", response.data);
         return [];
       }
+
+      // Convert database format to frontend Shape format
+      const shapes: (Shape & { id: number })[] = elements.map((element: any) => {
+        console.log("Converting element from DB:", element);
+        
+        const baseShape = {
+          id: element.id,
+          type: element.type,
+        };
+
+        switch (element.type) {
+          case "rect":
+            return {
+              ...baseShape,
+              type: "rect" as const,
+              x: element.x || 0,
+              y: element.y || 0,
+              width: element.width || 0,
+              height: element.height || 0,
+            };
+          
+          case "circle":
+            return {
+              ...baseShape,
+              type: "circle" as const,
+              centerX: element.centerX || 0,
+              centerY: element.centerY || 0,
+              radius: element.radius || 0,
+            };
+          
+          case "line":
+            return {
+              ...baseShape,
+              type: "line" as const,
+              startX: element.startX || 0,
+              startY: element.startY || 0,
+              endX: element.endX || 0,
+              endY: element.endY || 0,
+            };
+          
+          case "arrow":
+            return {
+              ...baseShape,
+              type: "arrow" as const,
+              startX: element.startX || 0,
+              startY: element.startY || 0,
+              endX: element.endX || 0,
+              endY: element.endY || 0,
+            };
+          
+          case "diamond":
+            return {
+              ...baseShape,
+              type: "diamond" as const,
+              centerX: element.centerX || 0,
+              centerY: element.centerY || 0,
+              width: element.width || 0,
+              height: element.height || 0,
+            };
+          
+          case "ellipse":
+            // Handle ellipse: use radiusX/radiusY if available, otherwise fallback to width/height
+            const radiusX = element.radiusX || (element.width ? element.width / 2 : 0);
+            const radiusY = element.radiusY || (element.height ? element.height / 2 : 0);
+            
+            console.log("Ellipse conversion - radiusX:", radiusX, "radiusY:", radiusY, "from element:", {
+              radiusX: element.radiusX,
+              radiusY: element.radiusY,
+              width: element.width,
+              height: element.height
+            });
+            
+            return {
+              ...baseShape,
+              type: "ellipse" as const,
+              centerX: element.centerX || 0,
+              centerY: element.centerY || 0,
+              radiusX: radiusX,
+              radiusY: radiusY,
+            };
+          
+          case "parallelogram":
+            // Handle parallelogram: use skew field if available, otherwise default to 0
+            const skew = element.skew !== null ? element.skew : 0;
+            
+            console.log("Parallelogram conversion - skew:", skew, "from element:", {
+              skew: element.skew,
+              x: element.x,
+              y: element.y,
+              width: element.width,
+              height: element.height
+            });
+            
+            return {
+              ...baseShape,
+              type: "parallelogram" as const,
+              x: element.x || 0,
+              y: element.y || 0,
+              width: element.width || 0,
+              height: element.height || 0,
+              skew: skew,
+            };
+          
+          default:
+            console.warn("Unknown shape type:", element.type);
+            // Return a fallback rectangle shape
+            return {
+              ...baseShape,
+              type: "rect" as const,
+              x: element.x || 0,
+              y: element.y || 0,
+              width: element.width || 10,
+              height: element.height || 10,
+            };
+        }
+      });
+
+      console.log("Converted shapes:", shapes);
+      return shapes;
+      
     }, 2, 1000);
     
   } catch (error) {

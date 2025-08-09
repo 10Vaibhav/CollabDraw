@@ -1,1 +1,1 @@
-export type Tool = "rect" | "line" | "circle" | "eraser";
+export type Tool = "rect" | "line" | "circle" | "eraser" | "arrow" | "diamond" | "ellipse" | "parallelogram";

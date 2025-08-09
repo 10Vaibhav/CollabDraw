@@ -18,7 +18,6 @@ app.use(cors({
 app.use(express.json());
 
 app.post("/signup", async (req, res) => {
-
     const parseData = CreateUserSchema.safeParse(req.body);
 
     if (!parseData.success) {
@@ -51,7 +50,6 @@ app.post("/signup", async (req, res) => {
         return;
 
     } catch (error) {
-
         console.error("Signup error:", error);
         res.status(500).json({
             message: "An internal server error occurred",
@@ -61,7 +59,6 @@ app.post("/signup", async (req, res) => {
 });
 
 app.post("/login", async (req, res) => {
-
     const parseData = SigninSchema.safeParse(req.body);
 
     if (!parseData.success) {
@@ -105,12 +102,11 @@ app.post("/login", async (req, res) => {
 });
 
 app.post("/logout", (req, res) => {
-    res.clearCookie("token"); // Clear the specific cookie holding the token
+    res.clearCookie("token");
     res.status(200).send("Logout successfully");
 });
 
 app.post("/document", middleware, async (req, res) => {
-
     const parsed = CreateRoomSchema.safeParse(req.body);
 
     if (!parsed.success) {
@@ -257,7 +253,6 @@ app.delete("/element", middleware, async (req, res) => {
     res.json({
         message: "Deleted"
     });
-
 });
 
 app.post("/session/update", middleware, async (req, res) => {
@@ -295,4 +290,5 @@ app.post("/session/update", middleware, async (req, res) => {
 
     res.json({ session });
 });
+
 app.listen(3001, () => console.log("Server running on http://localhost:3001"));

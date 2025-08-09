@@ -42,10 +42,13 @@ model Element {
   centerX     Float?
   centerY     Float?
   radius      Float?
+  radiusX     Float?   // New field for ellipse X radius
+  radiusY     Float?   // New field for ellipse Y radius
   startX      Float?
   startY      Float?
   endX        Float?
   endY        Float?
+  skew        Float?   // New field for parallelogram skew
   strokeColor String?
   fillColor   String?
   documentId  Int

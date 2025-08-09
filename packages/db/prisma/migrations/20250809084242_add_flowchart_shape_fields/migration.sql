@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Element" ADD COLUMN     "radiusX" DOUBLE PRECISION,
+ADD COLUMN     "radiusY" DOUBLE PRECISION,
+ADD COLUMN     "skew" DOUBLE PRECISION;
