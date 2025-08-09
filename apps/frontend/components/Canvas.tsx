@@ -6,7 +6,7 @@ import { LucideLogOut } from "lucide-react";
 import { TopBar } from "./TopBar";
 import { Game } from "@/draw/Game";
 import { IconButton } from "./IconButton";
-export type Tool = "rect" | "line" | "circle" | "eraser" | "arrow" | "diamond" | "ellipse" | "parallelogram";;
+export type Tool = "rect" | "line" | "circle" | "eraser" | "arrow" | "diamond" | "ellipse" | "parallelogram" | "select";
 
 
 export function Canvas({
