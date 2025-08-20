@@ -1,6 +1,6 @@
 import axios from "axios"
 import { HTTP_BACKEND } from "../config";
-import { Shape } from "./Game";
+import { Shape } from "./types";
 
 // Retry mechanism utility
 async function retryRequest<T>(
