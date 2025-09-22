@@ -1,23 +1,12 @@
 "use client"
 
-"use client";
-
 import { useEffect, useState } from "react";
 import { WS_URL } from "@/config";
 import { Canvas } from "./Canvas";
-import { getCookies } from "@/auth/auth";
-
-export function RoomCanvas({ roomId }: { roomId: string }) {
+ 
+export function RoomCanvas({ roomId, token }: { roomId: string; token?: string }) {
   const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [token, setToken] = useState<string | undefined>(undefined);
-
-  useEffect(() => {
-    async function fetchToken() {
-      const t = await getCookies();
-      setToken(t);
-    }
-    fetchToken();
-  }, []);
+ 
 
   useEffect(() => {
     if (!roomId || !token) {
@@ -32,7 +21,7 @@ export function RoomCanvas({ roomId }: { roomId: string }) {
     };
 
     ws.onerror = (err) => {
-      console.error("WebSocket error:", err);
+      console.warn("WebSocket warning:", err);
     };
 
     ws.onclose = () => {

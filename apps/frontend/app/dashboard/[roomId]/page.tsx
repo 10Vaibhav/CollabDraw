@@ -1,6 +1,9 @@
 import { RoomCanvas } from "@/components/RoomCanvas";
+import { cookies } from "next/headers";
 
 export default async function Page({ params }: { params: { roomId: string } }) {
   const { roomId } = await params;
-  return <RoomCanvas roomId={roomId} />;
+  const cookieStore = await cookies();
+  const token = cookieStore.get("token")?.value;
+  return <RoomCanvas roomId={roomId} token={token} />;
 }

@@ -3,7 +3,6 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import axios, { isAxiosError } from "axios";
 import { HTTP_BACKEND } from "@/config";
-import { useRouter } from "next/navigation";
 
 type Props = {
   isOpen: boolean;
@@ -14,7 +13,6 @@ type Props = {
 export default function CreateRoomModal({ isOpen, onClose, onRoomCreated }: Props) {
   const [roomName, setRoomName] = useState("");
   const [error, setError] = useState("");
-  const router = useRouter();
 
   if (!isOpen) return null;
 

@@ -211,135 +211,16 @@ export async function getExistingShapes(documentId: number): Promise<(Shape & { 
             }
           }
         } catch (e) {
-          console.error("Error loading shapes from local storage:", e);
+          console.warn("Error loading shapes from local storage:", e);
         }
-        
+            
         return [];
       }
 
-      // Convert database format to frontend Shape format
-      const shapes: (Shape & { id: number })[] = elements.map((element: any) => {
-        console.log("Converting element from DB:", element);
-        
-        const baseShape = {
-          id: element.id,
-          type: element.type,
-        };
-
-        switch (element.type) {
-          case "rect":
-            return {
-              ...baseShape,
-              type: "rect" as const,
-              x: element.x || 0,
-              y: element.y || 0,
-              width: element.width || 0,
-              height: element.height || 0,
-            };
-          
-          case "circle":
-            return {
-              ...baseShape,
-              type: "circle" as const,
-              centerX: element.centerX || 0,
-              centerY: element.centerY || 0,
-              radius: element.radius || 0,
-            };
-          
-          case "line":
-            return {
-              ...baseShape,
-              type: "line" as const,
-              startX: element.startX || 0,
-              startY: element.startY || 0,
-              endX: element.endX || 0,
-              endY: element.endY || 0,
-            };
-          
-          case "arrow":
-            return {
-              ...baseShape,
-              type: "arrow" as const,
-              startX: element.startX || 0,
-              startY: element.startY || 0,
-              endX: element.endX || 0,
-              endY: element.endY || 0,
-            };
-          
-          case "diamond":
-            return {
-              ...baseShape,
-              type: "diamond" as const,
-              centerX: element.centerX || 0,
-              centerY: element.centerY || 0,
-              width: element.width || 0,
-              height: element.height || 0,
-            };
-          
-          case "ellipse":
-            // Handle ellipse: use radiusX/radiusY if available, otherwise fallback to width/height
-            const radiusX = element.radiusX || (element.width ? element.width / 2 : 0);
-            const radiusY = element.radiusY || (element.height ? element.height / 2 : 0);
-            
-            console.log("Ellipse conversion - radiusX:", radiusX, "radiusY:", radiusY, "from element:", {
-              radiusX: element.radiusX,
-              radiusY: element.radiusY,
-              width: element.width,
-              height: element.height
-            });
-            
-            return {
-              ...baseShape,
-              type: "ellipse" as const,
-              centerX: element.centerX || 0,
-              centerY: element.centerY || 0,
-              radiusX: radiusX,
-              radiusY: radiusY,
-            };
-          
-          case "parallelogram":
-            // Handle parallelogram: use skew field if available, otherwise default to 0
-            const skew = element.skew !== null ? element.skew : 0;
-            
-            console.log("Parallelogram conversion - skew:", skew, "from element:", {
-              skew: element.skew,
-              x: element.x,
-              y: element.y,
-              width: element.width,
-              height: element.height
-            });
-            
-            return {
-              ...baseShape,
-              type: "parallelogram" as const,
-              x: element.x || 0,
-              y: element.y || 0,
-              width: element.width || 0,
-              height: element.height || 0,
-              skew: skew,
-            };
-          
-          default:
-            console.warn("Unknown shape type:", element.type);
-            // Return a fallback rectangle shape
-            return {
-              ...baseShape,
-              type: "rect" as const,
-              x: element.x || 0,
-              y: element.y || 0,
-              width: element.width || 10,
-              height: element.height || 10,
-            };
-        }
-      });
-
-      console.log("Converted shapes:", shapes);
-      return shapes;
-      
     }, 3, 2000); // Increased retries and delay
     
   } catch (error) {
-    console.error("Error in getExistingShapes:", error);
+    console.warn("Error in getExistingShapes:", error);
     // Always return empty array instead of throwing errors
     return [];
   }
@@ -402,20 +283,24 @@ export async function saveShape(shape: Shape, documentId: number): Promise<numbe
       case "eraser":
         // Skip saving eraser actions to the database
         console.log("Skipping save of eraser action");
-        return { id: -1 }; // Return dummy ID for eraser actions
-      default:
-        console.warn("Unknown shape type for saving:", shape.type);
-        throw new Error(`Unsupported shape type: ${shape.type}`);
+        return -1; // Return dummy ID for eraser actions
+      default: {
+        // Exhaustive check to satisfy TypeScript when all variants are handled
+        const _exhaustiveCheck: never = shape as never;
+        console.warn("Unknown shape variant in saveShape:", _exhaustiveCheck);
+        throw new Error("Unsupported shape type in saveShape");
+      }
     }
 
     // Save to local storage as backup
+    let tempId: number | null = null;
     try {
       const localShapesKey = `excalidraw_shapes_${documentId}`;
       const existingShapesStr = localStorage.getItem(localShapesKey);
       const existingShapes = existingShapesStr ? JSON.parse(existingShapesStr) : [];
       
       // Generate a temporary local ID if needed
-      const tempId = Date.now() + Math.floor(Math.random() * 1000);
+      tempId = Date.now() + Math.floor(Math.random() * 1000);
       const shapeWithId = { ...shapeData, id: tempId };
       
       existingShapes.push(shapeWithId);
@@ -446,7 +331,7 @@ export async function saveShape(shape: Shape, documentId: number): Promise<numbe
           const existingShapes = JSON.parse(existingShapesStr);
           // Replace the temporary ID with the real one
           const updatedShapes = existingShapes.map((s: any) => {
-            if (s.id === tempId) {
+            if (tempId !== null && s.id === tempId) {
               return { ...s, id: response.data.id };
             }
             return s;
@@ -463,7 +348,21 @@ export async function saveShape(shape: Shape, documentId: number): Promise<numbe
       return -1;
     }
   } catch (error) {
-    console.error("Error saving shape:", error);
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      if (status === 400) {
+        // Downgrade 400 to warning to avoid noisy console errors in dev
+        console.warn("Save shape request failed with 400 (bad request).", {
+          url: error.config?.url,
+          method: error.config?.method,
+          message: error.message,
+        });
+      } else {
+        console.warn(`Axios error saving shape (${status ?? "unknown"}):`, error.message);
+      }
+    } else {
+      console.error("Error saving shape:", error);
+    }
     throw error;
   }
 }
