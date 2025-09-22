@@ -178,6 +178,7 @@ export class Game {
 
   // Send shape to server
   public sendShapeToServer(shape: Shape) {
+    // Send to WebSocket for real-time updates
     if (this.socket.readyState === WebSocket.OPEN) {
       try {
         const message = {
@@ -188,8 +189,33 @@ export class Game {
         };
         this.socket.send(JSON.stringify(message));
       } catch (error) {
-        console.error("Error sending shape to server:", error);
+        console.error("Error sending shape to WebSocket server:", error);
       }
+    }
+    
+    // Save to HTTP backend for persistence
+    try {
+      import("./http").then(({ saveShape }) => {
+        const documentId = Number(this.roomId);
+        saveShape(shape, documentId)
+          .then(id => {
+            if (id > 0) {
+              console.log("Shape saved to database with ID:", id);
+              // Add the shape with its ID to existingShapes
+              const shapeWithId = { ...shape, id };
+              this.existingShapes.push(shapeWithId as any);
+              this.redrawStaticShapes();
+              this.redrawMainCanvas();
+            } else {
+              console.warn("Failed to save shape to database");
+            }
+          })
+          .catch(error => {
+            console.error("Error saving shape to database:", error);
+          });
+      });
+    } catch (error) {
+      console.error("Error importing saveShape function:", error);
     }
   }
 

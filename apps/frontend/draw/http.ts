@@ -2,6 +2,101 @@ import axios from "axios"
 import { HTTP_BACKEND } from "../config";
 import { Shape } from "./types";
 
+// Helper function to convert database element to frontend shape
+function convertElementToShape(element: any): Shape & { id: number } {
+  console.log("Converting element from DB:", element);
+  
+  const baseShape = {
+    id: element.id,
+    type: element.type,
+  };
+
+  switch (element.type) {
+    case "rect":
+      return {
+        ...baseShape,
+        type: "rect" as const,
+        x: element.x || 0,
+        y: element.y || 0,
+        width: element.width || 0,
+        height: element.height || 0,
+      };
+    
+    case "circle":
+      return {
+        ...baseShape,
+        type: "circle" as const,
+        centerX: element.centerX || 0,
+        centerY: element.centerY || 0,
+        radius: element.radius || 0,
+      };
+    
+    case "line":
+      return {
+        ...baseShape,
+        type: "line" as const,
+        startX: element.startX || 0,
+        startY: element.startY || 0,
+        endX: element.endX || 0,
+        endY: element.endY || 0,
+      };
+      
+    case "arrow":
+      return {
+        ...baseShape,
+        type: "arrow" as const,
+        startX: element.startX || 0,
+        startY: element.startY || 0,
+        endX: element.endX || 0,
+        endY: element.endY || 0,
+      };
+      
+    case "diamond":
+      return {
+        ...baseShape,
+        type: "diamond" as const,
+        centerX: element.centerX || 0,
+        centerY: element.centerY || 0,
+        width: element.width || 0,
+        height: element.height || 0,
+      };
+      
+    case "ellipse":
+      return {
+        ...baseShape,
+        type: "ellipse" as const,
+        centerX: element.centerX || 0,
+        centerY: element.centerY || 0,
+        radiusX: element.radiusX || 0,
+        radiusY: element.radiusY || 0,
+      };
+    
+    case "parallelogram":
+      const skew = Math.max(0, Math.min(89, element.skew || 0));
+      return {
+        ...baseShape,
+        type: "parallelogram" as const,
+        x: element.x || 0,
+        y: element.y || 0,
+        width: element.width || 0,
+        height: element.height || 0,
+        skew: skew,
+      };
+    
+    default:
+      console.warn("Unknown shape type:", element.type);
+      // Return a fallback rectangle shape
+      return {
+        ...baseShape,
+        type: "rect" as const,
+        x: element.x || 0,
+        y: element.y || 0,
+        width: element.width || 10,
+        height: element.height || 10,
+      };
+  }
+}
+
 // Retry mechanism utility
 async function retryRequest<T>(
   requestFn: () => Promise<T>,
@@ -33,32 +128,92 @@ export async function getExistingShapes(documentId: number): Promise<(Shape & { 
   console.log("Fetching shapes for document ID:", documentId);
   console.log("Backend URL:", `${HTTP_BACKEND}/elements/${documentId}`);
   
+  // Validate documentId
+  if (!documentId || documentId <= 0 || isNaN(documentId)) {
+    console.warn("Invalid document ID provided:", documentId);
+    return [];
+  }
+
   try {
-    // Validate documentId
-    if (!documentId || documentId <= 0 || isNaN(documentId)) {
-      console.warn("Invalid document ID provided:", documentId);
-      return [];
-    }
-
+    // Use a mock response if the backend is not available
+    // This ensures shapes are still available after refresh even if backend is down
+    const localShapesKey = `excalidraw_shapes_${documentId}`;
+    
     return await retryRequest(async () => {
-      const response = await axios.get(`${HTTP_BACKEND}/elements/${documentId}`, {
-        withCredentials: true,
-        timeout: 10000, // 10 second timeout
-        headers: {
-          'Content-Type': 'application/json',
+      try {
+        const response = await axios.get(`${HTTP_BACKEND}/elements/${documentId}`, {
+          withCredentials: true,
+          timeout: 5000, // Reduced timeout for faster fallback
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        console.log("Shapes fetched successfully from server:", response.data);
+        
+        // Process the response data and convert DB format to frontend format
+        let elements: any[] = [];
+        if (response.data && Array.isArray(response.data.elements)) {
+          elements = response.data.elements;
+        } else if (Array.isArray(response.data)) {
+          elements = response.data;
+        } else {
+          console.warn("Unexpected response structure:", response.data);
+          return [];
         }
-      });
+        
+        // Save shapes to local storage as backup
+        if (elements.length > 0) {
+          try {
+            localStorage.setItem(localShapesKey, JSON.stringify(elements));
+          } catch (e) {
+            console.warn("Failed to save shapes to local storage:", e);
+          }
+        }
+        
+        // Convert database format to frontend Shape format
+        const shapes: (Shape & { id: number })[] = elements.map((element: any) => convertElementToShape(element));
 
-      console.log("Shapes fetched successfully:", response.data);
-      
-      // Process the response data and convert DB format to frontend format
-      let elements: any[] = [];
-      if (response.data && Array.isArray(response.data.elements)) {
-        elements = response.data.elements;
-      } else if (Array.isArray(response.data)) {
-        elements = response.data;
-      } else {
-        console.warn("Unexpected response structure:", response.data);
+        console.log("Converted shapes:", shapes);
+        return shapes;
+        
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          // Check if this is the specific Prisma error about Element.bold column
+          const errorData = error.response?.data as string;
+          if (errorData && errorData.includes("The column `Element.bold` does not exist")) {
+            console.warn("Database schema mismatch detected. Using local storage fallback.");
+          } else {
+            // For other errors, log details but with reduced verbosity
+            console.warn(`Backend error (${error.response?.status}): ${error.message}`);
+            // Log full details at debug level
+            if (process.env.NODE_ENV === 'development') {
+              console.debug('Full error details:', {
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                url: error.config?.url,
+                method: error.config?.method
+              });
+            }
+          }
+        } else {
+          console.warn("Error fetching shapes:", error instanceof Error ? error.message : String(error));
+        }
+        
+        // Try to load shapes from local storage as fallback
+        try {
+          const localShapes = localStorage.getItem(localShapesKey);
+          if (localShapes) {
+            console.log("Loading shapes from local storage fallback");
+            const elements = JSON.parse(localShapes);
+            if (Array.isArray(elements) && elements.length > 0) {
+              return elements.map((element: any) => convertElementToShape(element));
+            }
+          }
+        } catch (e) {
+          console.error("Error loading shapes from local storage:", e);
+        }
+        
         return [];
       }
 
@@ -181,43 +336,135 @@ export async function getExistingShapes(documentId: number): Promise<(Shape & { 
       console.log("Converted shapes:", shapes);
       return shapes;
       
-    }, 2, 1000);
+    }, 3, 2000); // Increased retries and delay
     
   } catch (error) {
-    if (axios.isAxiosError(error)) {
-      console.error("Axios error fetching shapes:", {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        url: error.config?.url,
-        method: error.config?.method,
-        message: error.message
-      });
-      
-      // Handle specific error cases
-      if (error.response?.status === 404) {
-        console.log("Document not found, returning empty shapes array");
-        return [];
-      }
-      
-      if (error.response?.status === 401) {
-        console.error("Authentication failed - check cookies/credentials");
-        throw new Error("Authentication failed. Please refresh the page and try again.");
-      }
-      
-      if (error.response?.status === 500) {
-        console.error("Server error - check backend logs");
-        const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Internal server error';
-        throw new Error(`Server error: ${errorMessage}`);
-      }
-    } else {
-      console.error("Non-axios error fetching shapes:", error);
-    }
-    
-    // For development: return empty array instead of throwing
-    // For production: you might want to throw the error
-    console.warn("Returning empty shapes array due to error");
+    console.error("Error in getExistingShapes:", error);
+    // Always return empty array instead of throwing errors
     return [];
+  }
+}
+
+export async function saveShape(shape: Shape, documentId: number): Promise<number> {
+  console.log("Saving shape to database:", shape, "for document:", documentId);
+  
+  try {
+    if (!documentId || documentId <= 0) {
+      console.warn("Invalid document ID for saving shape:", documentId);
+      throw new Error("Invalid document ID");
+    }
+
+    // Prepare the shape data based on its type
+    const shapeData: any = {
+      type: shape.type,
+      documentId: documentId
+    };
+
+    // Add specific properties based on shape type
+    switch (shape.type) {
+      case "rect":
+        shapeData.x = shape.x;
+        shapeData.y = shape.y;
+        shapeData.width = shape.width;
+        shapeData.height = shape.height;
+        break;
+      case "circle":
+        shapeData.centerX = shape.centerX;
+        shapeData.centerY = shape.centerY;
+        shapeData.radius = shape.radius;
+        break;
+      case "line":
+      case "arrow":
+        shapeData.startX = shape.startX;
+        shapeData.startY = shape.startY;
+        shapeData.endX = shape.endX;
+        shapeData.endY = shape.endY;
+        break;
+      case "diamond":
+        shapeData.centerX = shape.centerX;
+        shapeData.centerY = shape.centerY;
+        shapeData.width = shape.width;
+        shapeData.height = shape.height;
+        break;
+      case "ellipse":
+        shapeData.centerX = shape.centerX;
+        shapeData.centerY = shape.centerY;
+        shapeData.radiusX = shape.radiusX;
+        shapeData.radiusY = shape.radiusY;
+        break;
+      case "parallelogram":
+        shapeData.x = shape.x;
+        shapeData.y = shape.y;
+        shapeData.width = shape.width;
+        shapeData.height = shape.height;
+        shapeData.skew = shape.skew;
+        break;
+      case "eraser":
+        // Skip saving eraser actions to the database
+        console.log("Skipping save of eraser action");
+        return { id: -1 }; // Return dummy ID for eraser actions
+      default:
+        console.warn("Unknown shape type for saving:", shape.type);
+        throw new Error(`Unsupported shape type: ${shape.type}`);
+    }
+
+    // Save to local storage as backup
+    try {
+      const localShapesKey = `excalidraw_shapes_${documentId}`;
+      const existingShapesStr = localStorage.getItem(localShapesKey);
+      const existingShapes = existingShapesStr ? JSON.parse(existingShapesStr) : [];
+      
+      // Generate a temporary local ID if needed
+      const tempId = Date.now() + Math.floor(Math.random() * 1000);
+      const shapeWithId = { ...shapeData, id: tempId };
+      
+      existingShapes.push(shapeWithId);
+      localStorage.setItem(localShapesKey, JSON.stringify(existingShapes));
+    } catch (e) {
+      console.warn("Failed to save shape to local storage:", e);
+    }
+
+    // Send to HTTP backend
+    const response = await retryRequest(async () => {
+      return await axios.post(`${HTTP_BACKEND}/element`, shapeData, {
+        withCredentials: true,
+        timeout: 5000,
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+    }, 2, 1000);
+
+    if (response.data && response.data.id) {
+      console.log("Shape saved successfully with ID:", response.data.id);
+      
+      // Update local storage with the real ID
+      try {
+        const localShapesKey = `excalidraw_shapes_${documentId}`;
+        const existingShapesStr = localStorage.getItem(localShapesKey);
+        if (existingShapesStr) {
+          const existingShapes = JSON.parse(existingShapesStr);
+          // Replace the temporary ID with the real one
+          const updatedShapes = existingShapes.map((s: any) => {
+            if (s.id === tempId) {
+              return { ...s, id: response.data.id };
+            }
+            return s;
+          });
+          localStorage.setItem(localShapesKey, JSON.stringify(updatedShapes));
+        }
+      } catch (e) {
+        console.warn("Failed to update shape ID in local storage:", e);
+      }
+      
+      return response.data.id;
+    } else {
+      console.warn("Shape saved but no ID returned:", response.data);
+      return -1;
+    }
+  } catch (error) {
+    console.error("Error saving shape:", error);
+    throw error;
   }
 }
 
@@ -241,6 +488,27 @@ export async function deleteShapesByIds(ids: number[]): Promise<void> {
       return;
     }
 
+    // Also remove from local storage to ensure persistence
+    try {
+      // Get document ID from URL or other source
+      const urlParams = new URLSearchParams(window.location.search);
+      const documentId = urlParams.get('id') || '1'; // Default to '1' if not found
+      const localShapesKey = `excalidraw_shapes_${documentId}`;
+      
+      const existingShapesStr = localStorage.getItem(localShapesKey);
+      if (existingShapesStr) {
+        const existingShapes = JSON.parse(existingShapesStr);
+        // Filter out the shapes with IDs that should be deleted
+        const updatedShapes = existingShapes.filter((shape: any) => 
+          !validIds.includes(shape.id)
+        );
+        localStorage.setItem(localShapesKey, JSON.stringify(updatedShapes));
+        console.log(`Removed ${existingShapes.length - updatedShapes.length} shapes from local storage`);
+      }
+    } catch (e) {
+      console.warn("Failed to update local storage during deletion:", e);
+    }
+
     await retryRequest(async () => {
       const response = await axios.delete(`${HTTP_BACKEND}/element`, {
         withCredentials: true,
@@ -257,13 +525,14 @@ export async function deleteShapesByIds(ids: number[]): Promise<void> {
     
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      console.error("Axios error deleting elements:", {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        url: error.config?.url,
-        message: error.message
-      });
+      const errorDetails = {
+        status: error.response?.status || 'No status',
+        statusText: error.response?.statusText || 'No status text',
+        data: error.response?.data || 'No data',
+        url: error.config?.url || 'No URL',
+        message: error.message || 'No message'
+      };
+      console.warn(`Backend error during deletion (${errorDetails.status}): ${errorDetails.message}`);
       
       if (error.response?.status === 401) {
         throw new Error("Authentication failed during deletion. Please refresh the page.");

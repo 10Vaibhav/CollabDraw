@@ -44,16 +44,21 @@ export async function loadExistingShapes(game: Game) {
     // Validate and convert roomId
     const documentId = Number(game.roomId);
     if (isNaN(documentId) || documentId <= 0) {
+      console.warn("Invalid document ID for loading shapes:", documentId);
       return;
     }
 
+    console.log("Loading existing shapes for document:", documentId);
     const shapes = await getExistingShapes(documentId);
 
-    if (Array.isArray(shapes)) {
+    if (Array.isArray(shapes) && shapes.length > 0) {
+      console.log(`Successfully loaded ${shapes.length} shapes`);
       game.existingShapes = shapes as any;
       // Redraw canvas with loaded shapes
       game.redrawStaticShapes();
       game.redrawMainCanvas();
+    } else {
+      console.log("No existing shapes found or empty array returned");
     }
   } catch (error) {
     console.error("Failed to load existing shapes:", error);

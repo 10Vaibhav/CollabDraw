@@ -9,13 +9,13 @@ datasource db {
 }
 
 model User {
-  id        Int           @id @default(autoincrement())
   email     String        @unique
   password  String
   name      String
-  username  String        @unique
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
+  username  String        @unique
+  id        Int           @id @default(autoincrement())
   documents Document[]
   sessions  UserSession[]
 }
@@ -27,8 +27,8 @@ model Document {
   createdBy     Int
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
-  elements      Element[]
   createdByUser User          @relation(fields: [createdBy], references: [id])
+  elements      Element[]
   userSessions  UserSession[]
 }
 
@@ -42,18 +42,26 @@ model Element {
   centerX     Float?
   centerY     Float?
   radius      Float?
-  radiusX     Float?   // New field for ellipse X radius
-  radiusY     Float?   // New field for ellipse Y radius
   startX      Float?
   startY      Float?
   endX        Float?
   endY        Float?
-  skew        Float?   // New field for parallelogram skew
   strokeColor String?
   fillColor   String?
   documentId  Int
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  radiusX     Float?
+  radiusY     Float?
+  skew        Float?
+  bold        Boolean?
+  fontFamily  String?
+  fontSize    Float?
+  italic      Boolean?
+  rotation    Float?
+  text        String?
+  textAlign   String?
+  textColor   String?
   document    Document @relation(fields: [documentId], references: [id])
 }
 
@@ -67,8 +75,8 @@ model UserSession {
   lastActiveAt       DateTime @default(now())
   createdAt          DateTime @default(now())
   updatedAT          DateTime @updatedAt
-  user               User     @relation(fields: [userId], references: [id])
   document           Document @relation(fields: [documentId], references: [id])
+  user               User     @relation(fields: [userId], references: [id])
 
   @@unique([userId, documentId])
 }
