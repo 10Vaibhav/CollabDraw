@@ -44,7 +44,7 @@ export default function App() {
   return (
     <div className="bg-[#FEF8E6] min-h-screen flex flex-col text-[#3090A1] font-sans">
 
-      {/* Navbar */}
+
       <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
         <h1 className="text-2xl font-bold text-[#3090A1]">CollabDraw</h1>
         <div className="flex items-center space-x-4">
@@ -57,7 +57,6 @@ export default function App() {
         </div>
       </nav>
 
-      {/* Hero Section */}
       <main className="flex-grow flex items-center relative">
         <div className="container mx-auto px-6 text-center">
           <div 
@@ -82,7 +81,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="bg-[#3090A1] mt-16 py-8">
         <div className="container mx-auto px-6 text-center text-[#FEF8E6]">
           <div className="flex justify-center space-x-6 mb-4">

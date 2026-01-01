@@ -25,11 +25,11 @@ export class ShapeSync {
     const shapes = this.getShapes();
     const shape = shapes[shapeIndex];
     if (!shape || !shape.id) {
-      console.log("⚠️ Shape has no ID, cannot send real-time update");
+      console.log("Shape has no ID, cannot send real-time update");
       return;
     }
     if (this.socket.readyState !== WebSocket.OPEN) {
-      console.log("⚠️ WebSocket not open, cannot send real-time update");
+      console.log("WebSocket not open, cannot send real-time update");
       return;
     }
 
@@ -42,7 +42,7 @@ export class ShapeSync {
       update: updateFields,
     } as const;
 
-    console.log("✨ Sending REAL-TIME update:", payload.shapeId, payload.update);
+    console.log("Sending REAL-TIME update:", payload.shapeId, payload.update);
     this.socket.send(JSON.stringify(payload));
   }
 
@@ -50,11 +50,11 @@ export class ShapeSync {
     const shapes = this.getShapes();
     const shape = shapes[shapeIndex];
     if (!shape || !shape.id) {
-      console.warn("⚠️ Cannot update shape without database ID");
+      console.warn("Cannot update shape without database ID");
       return;
     }
     if (this.socket.readyState !== WebSocket.OPEN) {
-      console.warn("⚠️ WebSocket not open, cannot send update");
+      console.warn("WebSocket not open, cannot send update");
       return;
     }
 
@@ -67,7 +67,7 @@ export class ShapeSync {
       update: updateFields,
     } as const;
 
-    console.log("💾 Sending DATABASE update:", payload.shapeId, payload.update);
+    console.log("Sending DATABASE update:", payload.shapeId, payload.update);
     this.socket.send(JSON.stringify(payload));
   }
 }
