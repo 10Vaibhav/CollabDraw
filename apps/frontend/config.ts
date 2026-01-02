@@ -1,3 +1,3 @@
 
-export const HTTP_BACKEND = "http://localhost:3001"
-export const WS_URL = "WS://localhost:3002" 
+export const HTTP_BACKEND = "https://collabdraw.vaibhavm.tech/api"
+export const WS_URL = "wss://collabdraw-ws.vaibhavm.tech" 

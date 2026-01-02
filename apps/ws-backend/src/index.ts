@@ -29,7 +29,14 @@ interface IncomingMessage {
     [key: string]: any; // For move/update message fields
 }
 
-const wss = new WebSocketServer({ port: 3002 });
+const wss = new WebSocketServer({ 
+    port: 3002,
+    verifyClient: (info: { origin: string; secure: boolean; req: any }) => {
+        // Allow connections only from specific origins
+        const allowedOrigins = ["http://localhost:3000", "https://collabdraw.vaibhavm.tech"];
+        return allowedOrigins.includes(info.origin);
+    }
+});
 const users: User[] = [];
 const rooms = new Map<string, Set<WebSocket>>();
 

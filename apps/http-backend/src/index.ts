@@ -12,7 +12,7 @@ import cookieParser from "cookie-parser";
 const app = express();
 app.use(cookieParser());
 app.use(cors({
-    origin: "http://localhost:3000",
+    origin: ["http://localhost:3000", "https://collabdraw.vaibhavm.tech"],
     credentials: true,
 }));
 app.use(express.json());
@@ -159,6 +159,7 @@ app.get("/document/:slug", middleware, async (req, res) => {
         res.status(404).json({
             message: "Not found"
         });
+        return;
     }
 
     res.json({
