@@ -32,16 +32,16 @@ export function ConsoleFilter() {
       "Request failed with status code",
     ];
 
-    console.error = (...args: any[]) => {
+    console.error = (...args: unknown[]) => {
       try {
         const allStr = args.map((a) => {
           try {
             if (typeof a === "string") return a;
             if (a && typeof a === "object") {
               // Axios errors often have isAxiosError and message/status
-              const isAxios = (a as any).isAxiosError || (a?.name === "AxiosError");
-              const msg = (a as any)?.message ?? "";
-              const status = (a as any)?.response?.status;
+              const isAxios = (a as Record<string, unknown>).isAxiosError || (a as { name?: string })?.name === "AxiosError";
+              const msg = (a as { message?: string })?.message ?? "";
+              const status = (a as { response?: { status?: number } })?.response?.status;
               return `${isAxios ? "AxiosError:" : ""} ${msg} ${status ?? ""}`;
             }
             return String(a);
@@ -58,13 +58,13 @@ export function ConsoleFilter() {
     };
 
     // Optionally down-level some warnings to keep console cleaner
-    console.warn = (...args: any[]) => {
+    console.warn = (...args: unknown[]) => {
       originalWarn(...args);
     };
 
     const handleUnhandledRejection = (e: PromiseRejectionEvent) => {
       try {
-        const reasonStr = String((e as any)?.reason ?? "");
+        const reasonStr = String((e as { reason?: unknown })?.reason ?? "");
         if (browserFilters.some((f) => reasonStr.includes(f))) {
           e.preventDefault();
         }
