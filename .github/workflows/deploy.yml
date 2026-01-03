@@ -1,0 +1,23 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 13.203.101.96
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PHRASE }}
+          script: |
+            cd /home/ubuntu/CollabDraw
+            git stash
+            git pull
+            chmod +x deploy.sh
+            ./deploy.sh
