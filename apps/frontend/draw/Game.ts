@@ -5,7 +5,7 @@ import { redrawStaticShapes as renderStaticShapes, redrawMainCanvas as renderMai
 import { ShapeSync } from "./sync";
 import { eraseShapesLocal } from "./eraser";
 import { initializeGame, retryLoadShapes as retryLoadShapesFn, joinRoom } from "./lifecycle";
-import { addCanvasEventListeners } from "./events";
+import { addCanvasEventListeners, removeCanvasEventListeners } from "./events";
 import { setupSocketHandlers } from "./sockets";
 
 export class Game {
@@ -73,10 +73,8 @@ export class Game {
   }
 
   public destroy() {
-    this.canvas.removeEventListener("mousedown", this.mouseDownHandler);
-    this.canvas.removeEventListener("mouseup", this.mouseUpHandler);
-    this.canvas.removeEventListener("mousemove", this.mouseMoveHandler);
-    this.canvas.removeEventListener("mouseleave", this.mouseUpHandler);
+    // Use the centralized event cleanup function
+    removeCanvasEventListeners(this);
 
     if (this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(

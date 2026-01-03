@@ -1,2 +1,39 @@
 @import "tailwindcss";
 
+/* Mobile-specific styles for draw engine */
+@media (max-width: 768px) {
+  /* Prevent text selection on mobile during drawing */
+  body {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Prevent scrolling when drawing */
+  body.drawing {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+  }
+
+  /* Ensure canvas takes full space on mobile */
+  canvas {
+    display: block;
+    max-width: 100vw;
+    max-height: 100vh;
+  }
+}
+
+/* Prevent zoom on double tap globally */
+* {
+  touch-action: manipulation;
+}
+
+/* Canvas-specific touch handling */
+canvas {
+  touch-action: none;
+}
+
