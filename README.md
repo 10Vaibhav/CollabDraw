@@ -17,7 +17,7 @@ A real-time collaborative whiteboard application built from scratch with a moder
 
 ### Frontend
 - **Next.js 15** - React framework with App Router
-- **React 19** - Latest React with concurrent features
+- **React 19** - Latest React with concurrent features (it uses React 19 under the hood)
 - **TypeScript** - Type-safe development
 - **Tailwind CSS 4** - Utility-first styling
 - **Lucide React** - Modern icon library
