@@ -14,6 +14,10 @@ app.use(cookieParser());
 app.use(cors({
     origin: ["http://localhost:3000", "https://collabdraw.vaibhavm.tech"],
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+    preflightContinue: false,
+    optionsSuccessStatus: 200
 }));
 app.use(express.json());
 
@@ -94,7 +98,14 @@ app.post("/login", async (req, res) => {
         userId: user.id
     }, JWT_SECRET);
 
-    res.cookie("token", token, { httpOnly: true, secure: false, maxAge: 86400000, sameSite: 'lax' });
+    const isProduction = process.env.NODE_ENV === 'production';
+    
+    res.cookie("token", token, { 
+        httpOnly: true, 
+        secure: isProduction, 
+        maxAge: 86400000, 
+        sameSite: isProduction ? 'none' : 'lax' 
+    });
 
     res.json({
         token
