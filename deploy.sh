@@ -1,13 +1,22 @@
 #!/bin/bash
 export PATH="/home/ubuntu/.nvm/versions/node/v24.12.0/bin:$PATH"
 
-cd CollabDraw
+echo "Starting deployment..."
 
+# Install dependencies and build
 pnpm install
 pnpm run build
 
-pm2 restart fe-server
-pm2 restart http-server
-pm2 restart ws-server
+# Stop existing PM2 processes
+pm2 stop ecosystem.config.js || true
 
-echo "Deployment completed!, Done check ✅"
+# Start services using ecosystem config
+pm2 start ecosystem.config.js
+
+# Save PM2 configuration
+pm2 save
+
+echo "Deployment completed! ✅"
+echo ""
+echo "Services status:"
+pm2 status
