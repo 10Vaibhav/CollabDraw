@@ -4,7 +4,10 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
-    const response = await fetch('https://collabdraw.vaibhavm.tech/api/signup', {
+    // Use the configured backend URL which includes /api prefix
+    const backendUrl = process.env.NEXT_PUBLIC_HTTP_BACKEND || 'https://collabdraw-http.vaibhavm.tech/api';
+    
+    const response = await fetch(`${backendUrl}/signup`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -33,7 +33,10 @@ const wss = new WebSocketServer({
     port: 3002,
     verifyClient: (info: { origin: string; secure: boolean; req: any }) => {
         // Allow connections only from specific origins
-        const allowedOrigins = ["http://localhost:3000", "https://collabdraw.vaibhavm.tech"];
+        const allowedOrigins = [
+            "http://localhost:3000", 
+            "https://collabdraw.vaibhavm.tech"
+        ];
         return allowedOrigins.includes(info.origin);
     }
 });
