@@ -26,12 +26,12 @@ async function loginUser(){
       password
     },{ withCredentials: true}) 
     
-    if(!res){
+    // Check if login was successful and we got a token
+    if(res.data && res.data.token){
+      router.push("/dashboard");
+    } else {
       setError("Something went wrong. Please try again.");
-      return;
     }
-
-    router.push("/dashboard");
   } catch (error) {
     if (axios.isAxiosError(error) && (error.response?.status === 403 || error.response?.status === 401)) {
       setError("Invalid credentials. Please check your email and password.");
