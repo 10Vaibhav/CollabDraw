@@ -4,14 +4,12 @@ import Button from '@/components/Button';
 import { HTTP_BACKEND } from '@/config';
 import axios from 'axios';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import React, { useState } from 'react';
 
 export default function Login () {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const router = useRouter();
 
 async function loginUser(){
   setError(''); // Reset error before new login attempt
@@ -28,7 +26,8 @@ async function loginUser(){
     
     // Check if login was successful and we got a token
     if(res.data && res.data.token){
-      router.push("/dashboard");
+      // Use window.location for full page reload to ensure cookie is available
+      window.location.href = "/dashboard";
     } else {
       setError("Something went wrong. Please try again.");
     }
