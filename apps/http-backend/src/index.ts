@@ -128,7 +128,8 @@ app.post("/login", async (req, res) => {
         httpOnly: true, 
         secure: isProduction, 
         maxAge: 86400000, 
-        sameSite: isProduction ? 'none' : 'lax' 
+        sameSite: isProduction ? 'none' : 'lax',
+        domain: isProduction ? '.vaibhavm.tech' : undefined  // Allow cookie across subdomains
     });
 
     res.json({
@@ -137,7 +138,10 @@ app.post("/login", async (req, res) => {
 });
 
 app.post("/logout", (req, res) => {
-    res.clearCookie("token");
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.clearCookie("token", {
+        domain: isProduction ? '.vaibhavm.tech' : undefined
+    });
     res.status(200).send("Logout successfully");
 });
 
