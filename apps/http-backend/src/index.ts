@@ -12,7 +12,31 @@ import cookieParser from "cookie-parser";
 const app = express();
 app.use(cookieParser());
 app.use(cors({
-    origin: ["http://localhost:3000", "https://collabdraw.vaibhavm.tech"],
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        const allowedOrigins = [
+            "http://localhost:3000",
+            "https://collabdraw.vaibhavm.tech",
+            // Allow any localhost port for development
+            /^http:\/\/localhost:\d+$/,
+            /^http:\/\/127\.0\.0\.1:\d+$/
+        ];
+        
+        const isAllowed = allowedOrigins.some(allowed => {
+            if (typeof allowed === 'string') {
+                return origin === allowed;
+            }
+            return allowed.test(origin);
+        });
+        
+        if (isAllowed) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],

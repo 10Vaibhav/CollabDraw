@@ -1,3 +1,9 @@
 
-export const HTTP_BACKEND = "https://collabdraw.vaibhavm.tech/api"
-export const WS_URL = "wss://collabdraw-ws.vaibhavm.tech" 
+// Use local backend in development, production URLs in production
+export const HTTP_BACKEND = process.env.NODE_ENV === 'production' 
+  ? "https://collabdraw.vaibhavm.tech/api"
+  : "http://localhost:3001"
+
+export const WS_URL = process.env.NODE_ENV === 'production'
+  ? "wss://collabdraw-ws.vaibhavm.tech"
+  : "ws://localhost:3002" 
