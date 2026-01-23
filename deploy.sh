@@ -16,4 +16,4 @@ pm2 restart fe-server
 pm2 restart http-server
 pm2 restart ws-server
 
-echo "Deployment completed!, Done check ✅"
+echo "Deployment completed!, Done check sure"
