@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 54.159.16.115
+          host: 13.232.154.126
           username: ubuntu
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           passphrase: ${{ secrets.PHRASE }}
